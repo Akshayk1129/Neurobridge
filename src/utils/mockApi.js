@@ -125,5 +125,40 @@ export const mockApi = {
                 attentionTrend
             }
         };
+    },
+
+    // GET /api/patients (Clinician View)
+    getPatients: async () => {
+        await delay();
+        const db = initDb();
+
+        // Return Real User + Mock Data for demo
+        return [
+            {
+                id: db.user.id,
+                name: db.user.name,
+                age: db.user.age_string,
+                lastScreening: db.screenings.length > 0
+                    ? new Date(db.screenings[db.screenings.length - 1].timestamp).toLocaleDateString()
+                    : 'No data',
+                risk: db.screenings.length > 0
+                    ? db.screenings[db.screenings.length - 1].risk_level
+                    : 'Unknown'
+            },
+            { id: 2, name: 'Liam Johnson', age: '4 years', lastScreening: '10/24/2025', risk: 'Medium' },
+            { id: 3, name: 'Emma Davis', age: '2 years, 8 months', lastScreening: '10/22/2025', risk: 'Low' }
+        ];
+    },
+
+    // GET /api/patients/:id/history
+    getPatientHistory: async (id) => {
+        await delay();
+        const db = initDb();
+
+        if (id === 1) {
+            return db.screenings.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        }
+        // Mock data for others
+        return [];
     }
 };
