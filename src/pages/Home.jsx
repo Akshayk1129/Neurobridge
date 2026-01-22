@@ -8,18 +8,17 @@ const Home = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:3001/api/user')
-            .then(res => res.json())
-            .then(data => {
-                setUser(data);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error(err);
-                // Fallback for demo if server offline
-                setUser({ name: 'Alex', age_string: '3 years', lastScreeningDate: 'Never' });
-                setLoading(false);
-            });
+        import('../utils/mockApi').then(({ mockApi }) => {
+            mockApi.getUser()
+                .then(data => {
+                    setUser(data);
+                    setLoading(false);
+                })
+                .catch(err => {
+                    console.error(err);
+                    setLoading(false);
+                });
+        });
     }, []);
 
     if (loading) return <div className="flex h-screen items-center justify-center"><Loader className="animate-spin text-primary-600 w-10 h-10" /></div>;

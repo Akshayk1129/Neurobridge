@@ -165,15 +165,12 @@ const Screening = () => {
 
         // Submit
         try {
-            await fetch('http://localhost:3001/api/screenings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    visionScore: attAvg,
-                    eegScore: Math.round(Math.random() * 80) + 10,
-                    attentionMetric: attAvg,
-                    motorMetric: motScore
-                })
+            const { mockApi } = await import('../utils/mockApi');
+            await mockApi.saveScreening({
+                visionScore: attAvg,
+                eegScore: Math.round(Math.random() * 80) + 10,
+                attentionMetric: attAvg,
+                motorMetric: motScore
             });
         } catch (e) {
             console.warn("Backend save failed:", e);

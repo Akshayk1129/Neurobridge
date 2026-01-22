@@ -8,22 +8,18 @@ const Progress = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:3001/api/progress')
-            .then(res => res.json())
-            .then(payload => {
-                // Support both old array format (fallback) and new object format
-                if (Array.isArray(payload)) {
-                    setData(payload);
-                } else {
+        import('../utils/mockApi').then(({ mockApi }) => {
+            mockApi.getProgress()
+                .then(payload => {
                     setData(payload.data);
                     setTrends(payload.trends);
-                }
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error(err);
-                setLoading(false);
-            });
+                    setLoading(false);
+                })
+                .catch(err => {
+                    console.error(err);
+                    setLoading(false);
+                });
+        });
     }, []);
 
     if (loading) return <div className="flex h-64 items-center justify-center"><Loader className="animate-spin text-primary-600 w-8 h-8" /></div>;

@@ -6,16 +6,17 @@ const Therapy = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('http://localhost:3001/api/progress')
-            .then(res => res.json())
-            .then(data => {
-                setData(data);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error(err);
-                setLoading(false);
-            });
+        import('../utils/mockApi').then(({ mockApi }) => {
+            mockApi.getProgress()
+                .then(response => {
+                    setData(response.data); // mockApi returns { data, trends }
+                    setLoading(false);
+                })
+                .catch(err => {
+                    console.error(err);
+                    setLoading(false);
+                });
+        });
     }, []);
 
     if (loading) return <div className="flex h-64 items-center justify-center"><Loader className="animate-spin text-primary-600" /></div>;

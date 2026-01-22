@@ -31,3 +31,5 @@ server/neurobridge.db-wal
 # Editor
 .vscode
 .idea
+
+.vercel
