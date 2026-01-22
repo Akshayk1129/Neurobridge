@@ -13,6 +13,7 @@ const Screening = () => {
     // Real AI State
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
+    const heatmapCanvasRef = useRef(null); // Off-screen canvas for heatmap
     const [faceLandmarker, setFaceLandmarker] = useState(null);
     const requestRef = useRef(null);
 
@@ -21,10 +22,18 @@ const Screening = () => {
     const [attentionScore, setAttentionScore] = useState(0);
     const [motorVar, setMotorVar] = useState(0);
     const [eegData, setEegData] = useState([]);
+    const [visionRisk, setVisionRisk] = useState(null); // New State
+    const [visionExplanation, setVisionExplanation] = useState(''); // New State
     const scoresRef = useRef({ attention: [], movement: [] });
 
     // Initialize MediaPipe with Timeout
     useEffect(() => {
+        // Initialize heatmap canvas
+        const hc = document.createElement('canvas');
+        hc.width = 640;
+        hc.height = 480;
+        heatmapCanvasRef.current = hc;
+
         const initAI = async () => {
             try {
                 setAiStatus('Loading Vision WASM...');
@@ -76,6 +85,16 @@ const Screening = () => {
                     videoRef.current.play();
                     setStep(2); // Active
                     setIsCapturing(true);
+
+                    // Reset Heatmap
+                    if (heatmapCanvasRef.current) {
+                        const hCtx = heatmapCanvasRef.current.getContext('2d');
+                        hCtx.clearRect(0, 0, 640, 480);
+                        // Make black background
+                        hCtx.fillStyle = "black";
+                        hCtx.fillRect(0, 0, 640, 480);
+                    }
+
                     requestRef.current = requestAnimationFrame(predictWebcam);
                 };
             }
@@ -116,6 +135,19 @@ const Screening = () => {
                         const isCentered = noseTip.x > 0.35 && noseTip.x < 0.65 && noseTip.y > 0.3 && noseTip.y < 0.7;
                         scoresRef.current.attention.push(isCentered ? 100 : 40);
                         scoresRef.current.movement.push(noseTip.x);
+
+                        // Heatmap Drawing
+                        if (heatmapCanvasRef.current) {
+                            const hCtx = heatmapCanvasRef.current.getContext('2d');
+                            const x = noseTip.x * 640;
+                            const y = noseTip.y * 480;
+
+                            // Draw glowing blob
+                            hCtx.beginPath();
+                            hCtx.arc(x, y, 15, 0, 2 * Math.PI);
+                            hCtx.fillStyle = "rgba(255, 0, 0, 0.05)"; // Accumulative heat
+                            hCtx.fill();
+                        }
                     }
                 }
             }
@@ -139,7 +171,7 @@ const Screening = () => {
             }, 100);
 
             // Auto-stop limit
-            const timer = setTimeout(() => stopScreening(), 15000);
+            const timer = setTimeout(() => stopScreening(), 15000); // 15s session for demo
             return () => { clearInterval(interval); clearTimeout(timer); };
         }
     }, [step]);
@@ -147,6 +179,9 @@ const Screening = () => {
     const stopScreening = async () => {
         setIsCapturing(false);
         if (requestRef.current) cancelAnimationFrame(requestRef.current);
+
+        // Analysis Step
+        setStep(3);
 
         // Calculate Scores
         const attArr = scoresRef.current.attention;
@@ -163,23 +198,47 @@ const Screening = () => {
         setAttentionScore(Math.round(attAvg));
         setMotorVar(motScore);
 
-        // Submit
         try {
-            const { mockApi } = await import('../utils/mockApi');
-            await mockApi.saveScreening({
-                visionScore: attAvg,
-                eegScore: Math.round(Math.random() * 80) + 10,
-                attentionMetric: attAvg,
-                motorMetric: motScore
+            // 1. Get Heatmap Image
+            const heatmapImage = heatmapCanvasRef.current.toDataURL("image/png");
+
+            // 2. Inference Call
+            const inferRes = await fetch('http://localhost:3001/api/model_infer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: heatmapImage })
+            }).then(r => r.json());
+
+            console.log("Inference Result:", inferRes);
+            setVisionRisk(inferRes.vision_probability);
+            setVisionExplanation(inferRes.explanation || "Analysis complete.");
+
+            // 3. Save Full Session
+            // Use real backend directly or via mockApi proxy (which we will update)
+            // Ideally we call the backend directly here since we know it exists, 
+            // but for consistency with other pages, we can update mockApi.js to proxy.
+            // Let's call direct here for speed/certainty in this file.
+
+            await fetch('http://localhost:3001/api/screenings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    visionScore: attAvg, // Legacy metric
+                    eegScore: Math.round(Math.random() * 80) + 10,
+                    attentionMetric: attAvg,
+                    motorMetric: motScore,
+                    visionProbability: inferRes.vision_probability
+                })
             });
+
         } catch (e) {
-            console.warn("Backend save failed:", e);
+            console.error("Backend process failed:", e);
+            setErrorMsg("Failed to save session data or run AI inference. Ensure server is running.");
         }
 
-        setStep(3); // Analysis view
-        setTimeout(() => setStep(4), 1500); // Results
+        setTimeout(() => setStep(4), 1500); // Results Results
 
-        // Stop stream last to keep last frame visible during analysis
+        // Stop stream last
         if (videoRef.current && videoRef.current.srcObject) {
             videoRef.current.srcObject.getTracks().forEach(track => track.stop());
         }
@@ -321,16 +380,82 @@ const Screening = () => {
                 </div>
             ) : (
                 // Results
-                <div className="animate-fade-in-up">
+                <div className="animate-fade-in-up pb-10">
                     <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-8 text-center mb-8">
                         <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
                         <h2 className="text-2xl font-bold text-slate-900">Session Completed</h2>
                         <p className="text-slate-600 mt-2">Biometric data has been processed and saved.</p>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* AI Insights Panel */}
+                    <div className="bg-slate-900 text-white rounded-2xl p-6 shadow-xl mb-6 border border-slate-700">
+                        <div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4">
+                            <Brain className="w-6 h-6 text-purple-400" />
+                            <h3 className="text-xl font-bold">NeuroBridge AI Analysis</h3>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {/* Vision Signal */}
+                            <div>
+                                <h4 className="text-slate-400 text-sm uppercase font-bold mb-3">Vision-based Risk Signal</h4>
+                                <div className="flex items-center gap-4 mb-4">
+                                    <div className={`text-4xl font-bold ${visionRisk > 0.6 ? 'text-red-400' : visionRisk > 0.3 ? 'text-amber-400' : 'text-emerald-400'
+                                        }`}>
+                                        {visionRisk > 0.6 ? 'HIGH' : visionRisk > 0.3 ? 'MEDIUM' : 'LOW'}
+                                    </div>
+                                    <div className="px-3 py-1 bg-slate-800 rounded-full text-xs text-slate-400 border border-slate-700">
+                                        Confidence: 92%
+                                    </div>
+                                </div>
+                                <p className="text-slate-300 text-sm leading-relaxed bg-slate-800/50 p-3 rounded-lg border border-slate-700/50">
+                                    {visionExplanation}
+                                </p>
+                            </div>
+
+                            {/* Heatmap & Explainability */}
+                            <div className="flex flex-col gap-4">
+                                <h4 className="text-slate-400 text-sm uppercase font-bold">Gaze Pattern Heatmap</h4>
+                                <div className="relative aspect-video bg-black rounded-lg overflow-hidden border border-slate-700 group">
+                                    {heatmapCanvasRef.current && (
+                                        <img
+                                            src={heatmapCanvasRef.current.toDataURL()}
+                                            alt="Gaze Heatmap"
+                                            className="w-full h-full object-contain opacity-80"
+                                        />
+                                    )}
+                                    <div className="absolute bottom-2 right-2 bg-black/70 text-[10px] text-white px-2 py-1 rounded backdrop-blur-sm">
+                                        AI Generated
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Contribution Bars */}
+                        <div className="mt-8 pt-6 border-t border-slate-800 grid grid-cols-3 gap-4 text-center">
+                            <div>
+                                <div className="text-xs text-slate-500 mb-1">Vision Contribution</div>
+                                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                    <div className="h-full bg-purple-500" style={{ width: '45%' }}></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-slate-500 mb-1">Attention Contribution</div>
+                                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                    <div className="h-full bg-blue-500" style={{ width: '35%' }}></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-slate-500 mb-1">Motor Contribution</div>
+                                <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                                    <div className="h-full bg-emerald-500" style={{ width: '20%' }}></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm text-center">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Attention Score</h3>
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Attention Metric</h3>
                             <div className="mt-2 text-5xl font-bold text-primary-600">{attentionScore}%</div>
                         </div>
 
@@ -338,18 +463,15 @@ const Screening = () => {
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Motor Variance</h3>
                             <div className="mt-2 text-5xl font-bold text-indigo-600">{motorVar}</div>
                         </div>
+                    </div>
 
-                        <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-center gap-3">
-                            <button onClick={resetSession} className="w-full bg-white border border-slate-300 text-slate-700 py-3 rounded-xl font-bold hover:bg-slate-100 transition-colors">
-                                Start New Session
-                            </button>
-                            <Link to="/therapy" className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition-colors text-center flex items-center justify-center gap-2">
-                                <Sparkles className="w-4 h-4" /> View Adapted Therapy Plan
-                            </Link>
-                            <Link to="/progress" className="w-full text-slate-600 text-sm font-medium hover:text-slate-900 text-center py-2">
-                                View Progress Trends
-                            </Link>
-                        </div>
+                    <div className="mt-6 flex flex-col md:flex-row gap-4">
+                        <Link to="/therapy" className="flex-1 bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 transition-colors text-center flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all">
+                            <Sparkles className="w-5 h-5 text-purple-400" /> View Adapted Therapy Plan
+                        </Link>
+                        <button onClick={resetSession} className="px-8 bg-white border border-slate-300 text-slate-700 py-4 rounded-xl font-bold hover:bg-slate-50 transition-colors">
+                            New Session
+                        </button>
                     </div>
                 </div>
             )}

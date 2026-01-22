@@ -37,9 +37,16 @@ const Therapy = () => {
     // --- DYNAMIC RULE ENGINE ---
     const lastSession = data.length > 0 ? data[data.length - 1] : null;
 
-    const generateGoals = (category, score) => {
+    const generateGoals = (category, score, visionScore = 0) => {
         // Logic Matrix for Generated Content
         if (category === 'attention') {
+            // VISION AI OVERRIDE: If Vision Risk is High (>60), enforce Eye Contact goals regardless of attention score
+            if (visionScore > 60) return [
+                { id: 'vis_1', text: 'Face-to-face engagement (Gaze Training)', type: 'Vision AI Priority' },
+                { id: 'vis_2', text: 'Track high-contrast objects', type: 'Vision AI Priority' },
+                { id: 'att_4', text: 'Maintain eye contact during request (5s)', type: 'Social' }
+            ];
+
             if (score < 40) return [
                 { id: 'att_1', text: 'Response to name call (3/5 trials)', type: 'Foundational' },
                 { id: 'att_2', text: 'Track moving object (visual pursuit)', type: 'Sensory' },
@@ -74,9 +81,10 @@ const Therapy = () => {
     // Default values if no data
     const attentionScore = lastSession ? lastSession.attention : 50;
     const motorScore = lastSession ? lastSession.motor : 20;
+    const visionRisk = lastSession ? (lastSession.visionRisk || 0) : 0;
 
     // Generate Dynamic Plans
-    const speechGoals = generateGoals('attention', attentionScore);
+    const speechGoals = generateGoals('attention', attentionScore, visionRisk);
     const motorGoals = generateGoals('motor', motorScore);
 
     // Calculate Completion
@@ -87,17 +95,17 @@ const Therapy = () => {
     const dynamicPlans = [
         {
             id: 'speech',
-            title: 'Communication & Focus',
+            title: visionRisk > 60 ? 'Social & Gaze Adaptation' : 'Communication & Focus',
             provider: 'Dr. Sarah Miller',
-            icon: MessageCircle,
+            icon: visionRisk > 60 ? UserCog : MessageCircle, // Change icon based on AI
             color: 'bg-blue-50 text-blue-600 border-blue-100',
             goals: speechGoals,
-            insight: attentionScore < 40
-                ? "Attention score is low (<40%). Focusing on foundational orientation and response."
-                : attentionScore > 70
-                    ? "Excellent attention span detected! Advancing to complex cognitive tasks."
+            insight: visionRisk > 60
+                ? `Updated due to increased gaze irregularity (${visionRisk}% risk) detected in last screening. Prioritizing social visuals.`
+                : attentionScore < 40
+                    ? "Attention score is low (<40%). Focusing on foundational orientation and response."
                     : "Attention is developing. Working on sustained interaction duration.",
-            priority: attentionScore < 50 ? 1 : 2
+            priority: visionRisk > 60 ? 1 : (attentionScore < 50 ? 2 : 3)
         },
         {
             id: 'motor',
@@ -109,7 +117,7 @@ const Therapy = () => {
             insight: motorScore > 60
                 ? "High motor variance indicated dysregulation. Plan updated to focus on calming/grounding tasks."
                 : "Motor control is stable. Plan updated to focus on fine precision skills.",
-            priority: motorScore > 70 ? 1 : 2
+            priority: motorScore > 70 ? 2 : 3
         }
     ].sort((a, b) => a.priority - b.priority);
 

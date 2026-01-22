@@ -69,8 +69,9 @@ const Progress = () => {
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                             <Tooltip />
                             <Legend />
-                            <Area type="monotone" dataKey="riskScore" name="Overall Score" stroke="#0ea5e9" fillOpacity={1} fill="url(#colorRisk)" />
-                            <Area type="monotone" dataKey="motor" name="Motor Skills" stroke="#14b8a6" fillOpacity={1} fill="url(#colorMotor)" />
+                            <Area type="monotone" dataKey="riskScore" name="Overall Risk" stroke="#0ea5e9" fillOpacity={1} fill="url(#colorRisk)" />
+                            <Area type="monotone" dataKey="motor" name="Motor Variance" stroke="#14b8a6" fillOpacity={1} fill="url(#colorMotor)" />
+                            <Area type="monotone" dataKey="visionRisk" name="Vision Risk" stroke="#f43f5e" fillOpacity={0.3} strokeDasharray="3 3" />
                             <Area type="monotone" dataKey="attention" name="Attention" stroke="#8b5cf6" fillOpacity={0} strokeDasharray="5 5" strokeWidth={2} />
                         </AreaChart>
                     </ResponsiveContainer>
